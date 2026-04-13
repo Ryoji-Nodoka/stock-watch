@@ -1,0 +1,822 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<title>高配当株ウォッチ</title>
+<style>
+:root {
+  --bg:    #0c0e18;
+  --card:  #141720;
+  --card2: #1c1f2e;
+  --bdr:   #252a3d;
+  --text:  #e8eaf5;
+  --sub:   #8890b0;
+  --muted: #4a5070;
+  --gold:  #f59e0b;
+  --green: #22c55e;
+  --blue:  #3b82f6;
+  --red:   #ef4444;
+  --ind:   #818cf8;
+  --def:   #38bdf8;
+  --cyc:   #fb923c;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html{background:var(--bg)}
+body{color:var(--text);font-family:-apple-system,'Hiragino Sans','Helvetica Neue',sans-serif;min-height:100vh}
+
+/* ── Header ── */
+.hd{position:sticky;top:0;z-index:99;background:rgba(12,14,24,.95);
+    backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);
+    border-bottom:1px solid var(--bdr);padding:12px 16px;
+    display:flex;align-items:center;justify-content:space-between}
+.hd-logo{font-size:.95rem;font-weight:800;letter-spacing:.02em}
+.hd-logo em{color:var(--ind);font-style:normal}
+.hd-r{display:flex;gap:7px}
+
+.btn{border:none;border-radius:10px;cursor:pointer;font-weight:700;
+     transition:opacity .12s;min-height:36px}
+.btn:active{opacity:.6}
+.btn-p{background:var(--ind);color:#fff;font-size:.82rem;padding:0 15px}
+.btn-g{background:var(--card2);color:var(--sub);border:1px solid var(--bdr);
+       font-size:.82rem;padding:0 12px}
+.btn-i{background:var(--card2);color:var(--sub);border:1px solid var(--bdr);
+       font-size:1rem;padding:0 11px;border-radius:10px}
+.btn:disabled{opacity:.35;pointer-events:none}
+
+/* ── Stats ── */
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;padding:12px 14px 0}
+.stat{background:var(--card);border:1px solid var(--bdr);border-radius:12px;
+      padding:10px 6px;text-align:center}
+.stat-n{font-size:1.45rem;font-weight:900;line-height:1}
+.stat-l{font-size:.58rem;color:var(--muted);margin-top:3px;
+        text-transform:uppercase;letter-spacing:.06em}
+
+/* ── Filter section ── */
+.filter-section{padding:10px 14px 0;display:flex;flex-direction:column;gap:8px}
+
+/* quick pills row */
+.quick-row{display:flex;align-items:center;gap:6px;overflow-x:auto;
+           scrollbar-width:none;padding-bottom:2px}
+.quick-row::-webkit-scrollbar{display:none}
+
+.qpill{flex-shrink:0;background:var(--card2);border:1px solid var(--bdr);
+       border-radius:20px;color:var(--sub);cursor:pointer;
+       font-size:.75rem;font-weight:700;padding:7px 12px;
+       white-space:nowrap;transition:all .14s;min-height:36px;
+       display:flex;align-items:center;gap:4px}
+.qpill.on{color:#fff}
+.qpill[data-group="type"][data-val="defensive"].on{background:rgba(56,189,248,.2);color:var(--def);border-color:var(--def)}
+.qpill[data-group="type"][data-val="cyclical"].on{background:rgba(251,146,60,.2);color:var(--cyc);border-color:var(--cyc)}
+.qpill[data-group="yield"].on{background:rgba(129,140,248,.2);color:var(--ind);border-color:var(--ind)}
+.qpill.sector-pill.has{background:rgba(129,140,248,.15);color:var(--ind);border-color:var(--ind)}
+.qpill-sep{flex-shrink:0;width:1px;height:20px;background:var(--bdr)}
+.sec-count{background:var(--ind);color:#fff;font-size:.6rem;font-weight:900;
+           border-radius:10px;padding:1px 5px;display:none}
+
+/* active chips */
+.active-chips{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.ac{display:flex;align-items:center;gap:4px;
+    background:rgba(129,140,248,.12);border:1px solid rgba(129,140,248,.3);
+    border-radius:20px;padding:4px 10px;
+    font-size:.72rem;font-weight:700;color:var(--ind)}
+.ac-x{cursor:pointer;font-size:.85rem;opacity:.7;line-height:1;padding:1px}
+.clear-all{font-size:.72rem;color:var(--muted);cursor:pointer;padding:4px 8px;
+           background:none;border:none;text-decoration:underline}
+
+/* ── Legend ── */
+.legend{display:flex;flex-wrap:wrap;gap:8px;padding:8px 14px 0;
+        align-items:center;font-size:.68rem}
+.leg{display:flex;align-items:center;gap:3px;color:var(--sub)}
+.ld{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+
+/* ── List ── */
+.list{padding:10px 14px 100px;display:flex;flex-direction:column;gap:10px}
+
+/* ── Card ── */
+.card{background:var(--card);border-radius:16px;border:1px solid var(--bdr);
+      border-left:4px solid var(--bdr);transition:transform .14s}
+.card:active{transform:scale(.99)}
+.card.y-gold {border-left-color:var(--gold)}
+.card.y-green{border-left-color:var(--green)}
+.card.y-blue {border-left-color:var(--blue)}
+.ci{padding:14px 15px}
+
+.cr1{display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-bottom:8px}
+.bdg{font-size:.62rem;font-weight:800;padding:3px 8px;border-radius:20px;white-space:nowrap}
+.b-def{background:rgba(56,189,248,.12);color:var(--def);border:1px solid rgba(56,189,248,.3)}
+.b-cyc{background:rgba(251,146,60,.12);color:var(--cyc);border:1px solid rgba(251,146,60,.3)}
+.b-sec{background:rgba(129,140,248,.1);color:var(--ind);border:1px solid rgba(129,140,248,.25)}
+
+.cr2{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
+.c-name{font-size:1rem;font-weight:800;line-height:1.3;margin-bottom:2px}
+.c-code{font-size:.68rem;color:var(--muted)}
+.c-yb{text-align:right;flex-shrink:0}
+.c-yn{font-size:1.5rem;font-weight:900;line-height:1;display:flex;align-items:baseline;gap:2px}
+.c-yn.y-gold {color:var(--gold)}
+.c-yn.y-green{color:var(--green)}
+.c-yn.y-blue {color:var(--blue)}
+.c-yn.y-none {color:var(--muted);font-size:1.1rem}
+.c-yl{font-size:.58rem;color:var(--muted);margin-top:1px}
+
+.c-prices{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:12px}
+.cp{background:var(--card2);border-radius:9px;padding:8px 6px;text-align:center}
+.cpl{font-size:.58rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px}
+.cpv{font-size:.9rem;font-weight:800}
+.up{color:var(--green)}.dn{color:var(--red)}.fl{color:var(--sub)}
+
+.c-foot{display:flex;align-items:center;justify-content:space-between;
+        padding-top:10px;margin-top:10px;border-top:1px solid var(--bdr)}
+.c-meta{font-size:.63rem;color:var(--muted);line-height:1.6}
+.c-acts{display:flex;gap:5px}
+.act{background:none;border:1px solid var(--bdr);border-radius:7px;
+     color:var(--sub);cursor:pointer;font-size:.72rem;font-weight:700;
+     padding:6px 11px;min-height:32px}
+.act.del{border-color:rgba(239,68,68,.35);color:var(--red)}
+
+/* ── Empty / Loading ── */
+.empty{text-align:center;padding:64px 24px;color:var(--muted)}
+.empty-i{font-size:2.8rem;margin-bottom:14px}
+.empty-t{font-size:.88rem;line-height:1.9}
+.cta{margin-top:18px;display:inline-block;background:var(--ind);color:#fff;
+     border:none;border-radius:10px;cursor:pointer;font-size:.85rem;
+     font-weight:700;padding:11px 24px}
+.loading{text-align:center;padding:60px 20px;color:var(--sub)}
+.spin{width:28px;height:28px;margin:0 auto 14px;border:3px solid var(--bdr);
+      border-top-color:var(--ind);border-radius:50%;animation:spin .75s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ── Bottom bar ── */
+.bottom{position:fixed;bottom:0;left:0;right:0;background:rgba(12,14,24,.96);
+        border-top:1px solid var(--bdr);
+        backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+        padding:10px 16px max(16px,env(safe-area-inset-bottom));
+        display:flex;align-items:center;justify-content:space-between}
+.btm-info{font-size:.72rem;color:var(--muted)}
+
+/* ── Modal (共通) ── */
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.75);
+         backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
+         z-index:200;display:none;align-items:flex-end;justify-content:center}
+.overlay.open{display:flex}
+.modal{background:var(--card);border:1px solid var(--bdr);border-radius:22px 22px 0 0;
+       width:100%;max-width:520px;
+       padding-bottom:max(20px,env(safe-area-inset-bottom));
+       max-height:90vh;overflow-y:auto;
+       animation:slideUp .26s cubic-bezier(.22,.85,.32,1)}
+@keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
+.mh{width:36px;height:4px;background:var(--bdr);border-radius:2px;margin:14px auto}
+.mt{font-size:1rem;font-weight:800;padding:0 20px 14px}
+.mb{padding:0 20px;display:flex;flex-direction:column;gap:14px}
+.mf{padding:16px 20px 0;display:flex;gap:8px}
+.mf .btn{flex:1;padding:13px;font-size:.88rem;border-radius:11px}
+
+/* form */
+.fl{font-size:.73rem;color:var(--sub);margin-bottom:5px;display:block;font-weight:600}
+.fi{width:100%;background:var(--card2);border:1px solid var(--bdr);
+    border-radius:10px;color:var(--text);font-size:.95rem;
+    padding:12px 13px;outline:none;-webkit-appearance:none;appearance:none}
+.fi:focus{border-color:var(--ind)}
+.fi::placeholder{color:var(--muted)}
+.fh{font-size:.67rem;color:var(--muted);margin-top:4px}
+.fer{font-size:.78rem;color:var(--red);margin-top:5px;display:none}
+.fer.on{display:block}
+.seg{display:flex;gap:5px}
+.sb{flex:1;background:var(--card2);border:1px solid var(--bdr);border-radius:9px;
+    color:var(--sub);cursor:pointer;font-size:.73rem;font-weight:700;
+    padding:10px 4px;text-align:center;min-height:40px;transition:all .14s}
+.sb.s-def{background:rgba(56,189,248,.14);color:var(--def);border-color:var(--def)}
+.sb.s-cyc{background:rgba(251,146,60,.14);color:var(--cyc);border-color:var(--cyc)}
+.sb.s-unk{background:rgba(129,140,248,.12);color:var(--ind);border-color:var(--ind)}
+.autofill{background:rgba(129,140,248,.08);border:1px solid rgba(129,140,248,.25);
+          border-radius:10px;padding:10px 13px;display:none}
+.af-tag{font-size:.62rem;color:var(--ind);font-weight:800;
+        text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px}
+.af-body{font-size:.8rem;color:var(--sub);line-height:1.8}
+.chkrow{display:flex;align-items:center;gap:9px}
+.chkrow input{width:18px;height:18px;accent-color:var(--ind);cursor:pointer}
+.chkrow label{font-size:.82rem;color:var(--sub);cursor:pointer}
+
+/* ── Sector sheet ── */
+.sec-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.sec-chip{background:var(--card2);border:1px solid var(--bdr);border-radius:10px;
+          color:var(--sub);cursor:pointer;font-size:.78rem;font-weight:700;
+          padding:11px 6px;text-align:center;min-height:44px;
+          display:flex;align-items:center;justify-content:center;
+          transition:all .14s}
+.sec-chip.on{background:rgba(129,140,248,.18);color:var(--ind);border-color:var(--ind)}
+
+/* init */
+.init-p{font-size:.8rem;line-height:1.8;display:none}
+.p-ok{color:var(--green)}.p-sk{color:var(--muted)}.p-fail{color:var(--red)}
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<header class="hd">
+  <div class="hd-logo">📈 <em>高配当株</em>ウォッチ</div>
+  <div class="hd-r">
+    <button class="btn btn-i" id="refreshBtn" onclick="loadAll()">⟳</button>
+    <button class="btn btn-g" onclick="openInitModal()" style="font-size:.7rem">初期登録</button>
+    <button class="btn btn-p" onclick="openAddModal()">＋ 追加</button>
+  </div>
+</header>
+
+<!-- Stats -->
+<div class="stats">
+  <div class="stat"><div class="stat-n" id="sTotal" style="color:var(--ind)">—</div><div class="stat-l">銘柄数</div></div>
+  <div class="stat"><div class="stat-n" id="sHigh"  style="color:var(--gold)">—</div><div class="stat-l">5%超え</div></div>
+  <div class="stat"><div class="stat-n" id="sUp"    style="color:var(--green)">—</div><div class="stat-l">上昇中</div></div>
+  <div class="stat"><div class="stat-n" id="sDown"  style="color:var(--red)">—</div><div class="stat-l">下落中</div></div>
+</div>
+
+<!-- Legend -->
+<div class="legend">
+  <span style="color:var(--muted);font-size:.62rem">利回り：</span>
+  <span class="leg"><span class="ld" style="background:var(--gold)"></span>👑 5%+</span>
+  <span class="leg"><span class="ld" style="background:var(--green)"></span>✅ 4.5%+</span>
+  <span class="leg"><span class="ld" style="background:var(--blue)"></span>📈 4%+</span>
+  <span style="color:var(--bdr)">｜</span>
+  <span class="leg" style="color:var(--def)">🛡️ ディフェンシブ</span>
+  <span class="leg" style="color:var(--cyc)">⚡ 景気敏感</span>
+</div>
+
+<!-- Filter section -->
+<div class="filter-section">
+  <!-- Quick pills -->
+  <div class="quick-row">
+    <button class="qpill" data-group="type" data-val="defensive" onclick="toggleFilter('type','defensive',this)">🛡️ ディフェンシブ</button>
+    <button class="qpill" data-group="type" data-val="cyclical"  onclick="toggleFilter('type','cyclical',this)">⚡ 景気敏感</button>
+    <div class="qpill-sep"></div>
+    <button class="qpill" data-group="yield" data-val="5" onclick="toggleFilter('yield','5',this)">👑 5%超え</button>
+    <button class="qpill" data-group="yield" data-val="4" onclick="toggleFilter('yield','4',this)">📈 4%超え</button>
+    <div class="qpill-sep"></div>
+    <button class="qpill sector-pill" id="sectorPill" onclick="openSectorSheet()">
+      業種 <span class="sec-count" id="secCount"></span> ▾
+    </button>
+  </div>
+
+  <!-- Active filter chips -->
+  <div class="active-chips" id="activeChips" style="display:none"></div>
+</div>
+
+<!-- List -->
+<div class="list" id="stockList">
+  <div class="loading"><div class="spin"></div>株価を取得中...</div>
+</div>
+
+<!-- Bottom bar -->
+<div class="bottom">
+  <span class="btm-info" id="nextRefresh">読み込み中...</span>
+  <button class="btn btn-g" style="font-size:.75rem;padding:0 13px" onclick="loadAll()">今すぐ更新</button>
+</div>
+
+
+<!-- ══ SECTOR SHEET ══ -->
+<div class="overlay" id="sectorOverlay" onclick="closeSectorSheet(event)">
+  <div class="modal">
+    <div class="mh"></div>
+    <div class="mt">業種で絞り込む</div>
+    <div class="mb">
+      <div style="font-size:.75rem;color:var(--sub)">複数選択できます。選択なしは「すべての業種」を表示します。</div>
+      <div class="sec-grid" id="sectorGrid"></div>
+    </div>
+    <div class="mf">
+      <button class="btn btn-g" onclick="clearSectors()">クリア</button>
+      <button class="btn btn-p" onclick="document.getElementById('sectorOverlay').classList.remove('open')">完了</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- ══ ADD MODAL ══ -->
+<div class="overlay" id="addOverlay" onclick="closeModal('addOverlay',event)">
+  <div class="modal">
+    <div class="mh"></div>
+    <div class="mt">銘柄を追加</div>
+    <div class="mb">
+      <div>
+        <label class="fl">証券コード *</label>
+        <div style="position:relative">
+          <input class="fi" id="addCode" type="number" placeholder="例: 7203" inputmode="numeric"
+                 oninput="onCodeInput(this.value)" style="padding-right:38px">
+          <span id="addSpin" style="position:absolute;right:11px;top:50%;transform:translateY(-50%);display:none">
+            <span class="spin" style="width:15px;height:15px;border-width:2px;display:inline-block"></span>
+          </span>
+        </div>
+        <div class="fh">4桁を入力すると自動で情報を補完します</div>
+      </div>
+      <div class="autofill" id="addAutoFill">
+        <div class="af-tag">✨ 自動補完（変更可）</div>
+        <div class="af-body" id="addAutoFillText"></div>
+      </div>
+      <div><label class="fl">銘柄名</label><input class="fi" id="addName" type="text" placeholder="コード入力で自動補完"></div>
+      <div><label class="fl">業種</label><input class="fi" id="addSector" type="text" placeholder="コード入力で自動補完"></div>
+      <div>
+        <label class="fl">銘柄タイプ</label>
+        <div class="seg">
+          <button class="sb" data-type="defensive" onclick="selType(this,'add')">🛡️ ディフェンシブ</button>
+          <button class="sb s-unk" data-type="unknown" onclick="selType(this,'add')">● 不明</button>
+          <button class="sb" data-type="cyclical"  onclick="selType(this,'add')">⚡ 景気敏感</button>
+        </div>
+      </div>
+      <div>
+        <label class="fl">年間配当（1株あたり・円）</label>
+        <input class="fi" id="addDividend" type="number" step="0.1" placeholder="コード入力で自動補完" inputmode="decimal">
+        <div class="fh">利回り計算に使用します</div>
+      </div>
+      <div><label class="fl">メモ（任意）</label><input class="fi" id="addMemo" type="text" placeholder="例: 優待あり"></div>
+      <div class="fer" id="addErr"></div>
+    </div>
+    <div class="mf">
+      <button class="btn btn-g" onclick="closeModal('addOverlay')">キャンセル</button>
+      <button class="btn btn-p" id="addBtn" onclick="submitAdd()">追加する</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- ══ EDIT MODAL ══ -->
+<div class="overlay" id="editOverlay" onclick="closeModal('editOverlay',event)">
+  <div class="modal">
+    <div class="mh"></div>
+    <div class="mt" id="editTitle">設定を変更</div>
+    <div class="mb">
+      <input type="hidden" id="editCode">
+      <div><label class="fl">銘柄名</label><input class="fi" id="editName" type="text"></div>
+      <div><label class="fl">業種</label><input class="fi" id="editSector" type="text"></div>
+      <div>
+        <label class="fl">銘柄タイプ</label>
+        <div class="seg">
+          <button class="sb" data-type="defensive" onclick="selType(this,'edit')">🛡️ ディフェンシブ</button>
+          <button class="sb" data-type="unknown"   onclick="selType(this,'edit')">● 不明</button>
+          <button class="sb" data-type="cyclical"  onclick="selType(this,'edit')">⚡ 景気敏感</button>
+        </div>
+      </div>
+      <div><label class="fl">年間配当（円）</label><input class="fi" id="editDividend" type="number" step="0.1" inputmode="decimal"></div>
+      <div><label class="fl">メモ</label><input class="fi" id="editMemo" type="text"></div>
+      <div class="chkrow">
+        <input type="checkbox" id="editReset">
+        <label for="editReset">基準株価を現在値にリセット</label>
+      </div>
+      <div class="fer" id="editErr"></div>
+    </div>
+    <div class="mf">
+      <button class="btn btn-g" onclick="closeModal('editOverlay')">キャンセル</button>
+      <button class="btn btn-p" id="editBtn" onclick="submitEdit()">保存する</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- ══ INIT MODAL ══ -->
+<div class="overlay" id="initOverlay" onclick="closeModal('initOverlay',event)">
+  <div class="modal">
+    <div class="mh"></div>
+    <div class="mt">高配当株 初期登録</div>
+    <div class="mb">
+      <div style="font-size:.82rem;color:var(--sub);line-height:1.8">
+        三菱商事・三井物産・NTT・三井住友FG<br>
+        ENEOS・住友商事・JT・武田薬品工業<br>
+        をまとめて登録します（登録済みはスキップ）
+      </div>
+      <div class="init-p" id="initProgress"></div>
+    </div>
+    <div class="mf">
+      <button class="btn btn-g" onclick="closeModal('initOverlay')">キャンセル</button>
+      <button class="btn btn-p" id="initBtn" onclick="submitInit()">一括登録する</button>
+    </div>
+  </div>
+</div>
+
+
+<script>
+// ─── State ─────────────────────────────────────────────
+let stocks   = [];
+let addType  = 'unknown';
+let editType = 'unknown';
+let countdown = 300;
+let timerID;
+let lookupTmr;
+
+// フィルター状態（グループ内OR、グループ間AND）
+const F = { types: new Set(), sectors: new Set(), yields: new Set() };
+
+// ─── Filter logic ───────────────────────────────────────
+function applyFilter(data) {
+  return data.filter(s => {
+    if (F.types.size   && !F.types.has(s.stock_type)) return false;
+    if (F.sectors.size && !F.sectors.has(s.sector))   return false;
+    if (F.yields.size) {
+      const y = s.dividend_yield || 0;
+      const ok = [...F.yields].some(v => (v === '5' ? y >= 5 : y >= 4));
+      if (!ok) return false;
+    }
+    return true;
+  });
+}
+
+function toggleFilter(group, val, btn) {
+  const set = F[group + 's'] || (group === 'type' ? F.types : group === 'yield' ? F.yields : null);
+  if (!set) return;
+  if (set.has(val)) { set.delete(val); btn.classList.remove('on'); }
+  else              { set.add(val);    btn.classList.add('on');    }
+  updateActiveChips();
+  renderList();
+}
+
+function clearSectors() {
+  F.sectors.clear();
+  document.querySelectorAll('.sec-chip').forEach(c => c.classList.remove('on'));
+  updateSectorPill();
+  updateActiveChips();
+  renderList();
+}
+
+function clearAllFilters() {
+  F.types.clear(); F.sectors.clear(); F.yields.clear();
+  document.querySelectorAll('.qpill').forEach(b => b.classList.remove('on'));
+  document.querySelectorAll('.sec-chip').forEach(c => c.classList.remove('on'));
+  updateSectorPill();
+  updateActiveChips();
+  renderList();
+}
+
+// ─── Active chips display ───────────────────────────────
+const LABELS = {
+  defensive: '🛡️ ディフェンシブ', cyclical: '⚡ 景気敏感',
+  '5': '👑 5%超え', '4': '📈 4%超え'
+};
+
+function updateActiveChips() {
+  const el = document.getElementById('activeChips');
+  const all = [
+    ...[...F.types].map(v   => ({ group:'type',   val: v, label: LABELS[v] || v })),
+    ...[...F.sectors].map(v  => ({ group:'sector', val: v, label: v })),
+    ...[...F.yields].map(v   => ({ group:'yield',  val: v, label: LABELS[v] || v })),
+  ];
+  if (!all.length) { el.style.display = 'none'; return; }
+  el.style.display = 'flex';
+  el.innerHTML = all.map(f =>
+    `<span class="ac">${f.label}<span class="ac-x" onclick="removeChip('${f.group}','${f.val}')">✕</span></span>`
+  ).join('') + `<button class="clear-all" onclick="clearAllFilters()">すべてクリア</button>`;
+}
+
+function removeChip(group, val) {
+  const set = group === 'type' ? F.types : group === 'sector' ? F.sectors : F.yields;
+  set.delete(val);
+  if (group === 'type' || group === 'yield') {
+    const attr = group === 'type' ? `[data-group="type"][data-val="${val}"]`
+                                  : `[data-group="yield"][data-val="${val}"]`;
+    document.querySelector('.qpill' + attr)?.classList.remove('on');
+  } else {
+    document.querySelectorAll('.sec-chip').forEach(c => { if (c.dataset.sec === val) c.classList.remove('on'); });
+    updateSectorPill();
+  }
+  updateActiveChips();
+  renderList();
+}
+
+// ─── Sector sheet ───────────────────────────────────────
+function buildSectorGrid() {
+  const sectors = [...new Set(stocks.map(s => s.sector).filter(Boolean))].sort();
+  const grid = document.getElementById('sectorGrid');
+  grid.innerHTML = sectors.map(sec => {
+    const on = F.sectors.has(sec) ? ' on' : '';
+    return `<button class="sec-chip${on}" data-sec="${sec}" onclick="toggleSector('${sec}',this)">${sec}</button>`;
+  }).join('');
+}
+
+function toggleSector(sec, btn) {
+  if (F.sectors.has(sec)) { F.sectors.delete(sec); btn.classList.remove('on'); }
+  else                    { F.sectors.add(sec);    btn.classList.add('on');    }
+  updateSectorPill();
+  updateActiveChips();
+  renderList();
+}
+
+function updateSectorPill() {
+  const n   = F.sectors.size;
+  const cnt = document.getElementById('secCount');
+  const pil = document.getElementById('sectorPill');
+  cnt.textContent = n;
+  cnt.style.display = n ? 'inline' : 'none';
+  pil.classList.toggle('has', n > 0);
+}
+
+function openSectorSheet() {
+  buildSectorGrid();
+  document.getElementById('sectorOverlay').classList.add('open');
+}
+
+function closeSectorSheet(e) {
+  if (e.target === document.getElementById('sectorOverlay'))
+    document.getElementById('sectorOverlay').classList.remove('open');
+}
+
+// ─── Helpers ────────────────────────────────────────────
+const fmt = n => n != null ? Number(n).toLocaleString('ja-JP') + '円' : '—';
+const yIcon = t => ({gold:'👑',green:'✅',blue:'📈'})[t] || '';
+
+function typeBadge(t) {
+  if (t === 'defensive') return `<span class="bdg b-def">🛡️ ディフェンシブ</span>`;
+  if (t === 'cyclical')  return `<span class="bdg b-cyc">⚡ 景気敏感</span>`;
+  return '';
+}
+
+// ─── Render card ────────────────────────────────────────
+function renderCard(s) {
+  const ys  = s.dividend_yield != null ? s.dividend_yield.toFixed(2) + '%' : '—';
+  const yc  = s.yield_tier !== 'none' ? 'y-' + s.yield_tier : 'y-none';
+  const ico = s.yield_tier !== 'none' ? `<span>${yIcon(s.yield_tier)}</span>` : '';
+  const cs  = s.change_pct != null ? (s.change_pct >= 0 ? '+' : '') + s.change_pct.toFixed(2) + '%' : '—';
+  const cc  = s.status === 'up' ? 'up' : s.status === 'down' ? 'dn' : 'fl';
+  const cc2 = s.yield_tier !== 'none' ? 'y-' + s.yield_tier : '';
+  const sec = s.sector ? `<span class="bdg b-sec">${s.sector}</span>` : '';
+
+  return `
+<div class="card ${cc2}" id="card-${s.code}">
+  <div class="ci">
+    <div class="cr1">${typeBadge(s.stock_type)}${sec}</div>
+    <div class="cr2">
+      <div>
+        <div class="c-name">${s.name}</div>
+        <div class="c-code">${s.code}${s.memo ? ' · ' + s.memo : ''}</div>
+      </div>
+      <div class="c-yb">
+        <div class="c-yn ${yc}">${ico}${ys}</div>
+        <div class="c-yl">配当利回り</div>
+      </div>
+    </div>
+    <div class="c-prices">
+      <div class="cp"><div class="cpl">現在株価</div><div class="cpv">${fmt(s.current_price)}</div></div>
+      <div class="cp"><div class="cpl">変化率</div><div class="cpv ${cc}">${cs}</div></div>
+      <div class="cp"><div class="cpl">年間配当</div><div class="cpv">${s.dividend_per_share > 0 ? s.dividend_per_share.toLocaleString('ja-JP') + '円' : '—'}</div></div>
+    </div>
+    <div class="c-foot">
+      <div class="c-meta">基準 ${fmt(s.base_price)} · ${s.updated_at || '—'}</div>
+      <div class="c-acts">
+        <button class="act" onclick="openEditModal('${s.code}')">編集</button>
+        <button class="act del" onclick="deleteStock('${s.code}')">削除</button>
+      </div>
+    </div>
+  </div>
+</div>`;
+}
+
+// ─── Render list ────────────────────────────────────────
+function renderList() {
+  const el  = document.getElementById('stockList');
+  const filtered = applyFilter(stocks);
+  const hasAnyFilter = F.types.size || F.sectors.size || F.yields.size;
+
+  if (!stocks.length) {
+    el.innerHTML = `<div class="empty"><div class="empty-i">📊</div>
+      <div class="empty-t">銘柄が登録されていません<br>「初期登録」から高配当株8銘柄を一括追加できます</div>
+      <button class="cta" onclick="openInitModal()">▶ 初期登録する</button></div>`;
+    return;
+  }
+  if (!filtered.length) {
+    el.innerHTML = `<div class="empty"><div class="empty-i">🔍</div>
+      <div class="empty-t">条件に一致する銘柄がありません<br>
+      <button class="cta" style="margin-top:12px" onclick="clearAllFilters()">フィルターをクリア</button></div></div>`;
+    return;
+  }
+
+  const sorted = [...filtered].sort((a, b) => (b.dividend_yield || 0) - (a.dividend_yield || 0));
+  el.innerHTML = sorted.map(renderCard).join('');
+}
+
+function updateStats() {
+  document.getElementById('sTotal').textContent = stocks.length;
+  document.getElementById('sHigh').textContent  = stocks.filter(s => (s.dividend_yield || 0) >= 5).length;
+  document.getElementById('sUp').textContent    = stocks.filter(s => s.status === 'up').length;
+  document.getElementById('sDown').textContent  = stocks.filter(s => s.status === 'down').length;
+}
+
+// ─── Fetch ──────────────────────────────────────────────
+async function fetchWT(url, ms = 15000) {
+  const ctrl = new AbortController();
+  const id   = setTimeout(() => ctrl.abort(), ms);
+  try { const r = await fetch(url, {signal: ctrl.signal}); clearTimeout(id); return r; }
+  catch(e) { clearTimeout(id); throw e.name === 'AbortError' ? new Error('タイムアウト') : e; }
+}
+
+async function loadAll() {
+  const btn = document.getElementById('refreshBtn');
+  btn.textContent = '…'; btn.disabled = true;
+  document.getElementById('stockList').innerHTML =
+    '<div class="loading"><div class="spin"></div>株価を取得中...</div>';
+
+  try {
+    const res  = await fetchWT('/api/stocks', 15000);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    if (!Array.isArray(data)) throw new Error('データ形式エラー');
+    stocks = data;
+  } catch(e) {
+    document.getElementById('stockList').innerHTML =
+      `<div class="empty"><div class="empty-i">⚠️</div>
+       <div class="empty-t">取得に失敗しました<br><small style="color:var(--red)">${e.message}</small></div>
+       <button class="cta" onclick="loadAll()">再試行</button></div>`;
+    btn.textContent = '⟳'; btn.disabled = false;
+    return;
+  }
+
+  try { renderList(); }   catch(e) { console.error(e); }
+  try { updateStats(); }  catch(e) { console.error(e); }
+
+  countdown = 300;
+  btn.textContent = '⟳'; btn.disabled = false;
+}
+
+// ─── Countdown ──────────────────────────────────────────
+function startTimer() {
+  clearInterval(timerID);
+  timerID = setInterval(() => {
+    if (--countdown <= 0) { loadAll(); return; }
+    const m = Math.floor(countdown / 60), s = countdown % 60;
+    document.getElementById('nextRefresh').textContent =
+      `次回更新まで ${m}:${String(s).padStart(2,'0')}`;
+  }, 1000);
+}
+
+// ─── Type segment ────────────────────────────────────────
+function selType(btn, prefix) {
+  const t = btn.dataset.type;
+  if (prefix === 'add') addType = t; else editType = t;
+  btn.closest('.seg').querySelectorAll('.sb').forEach(b => {
+    b.className = 'sb';
+    if (b.dataset.type === t) b.classList.add('s-' + t.slice(0,3));
+  });
+}
+function setSeg(prefix, t) {
+  const id = prefix === 'add' ? 'addOverlay' : 'editOverlay';
+  document.getElementById(id).querySelectorAll('.sb').forEach(b => {
+    b.className = 'sb';
+    if (b.dataset.type === t) b.classList.add('s-' + t.slice(0,3));
+  });
+  if (prefix === 'add') addType = t; else editType = t;
+}
+
+// ─── Modal ──────────────────────────────────────────────
+function closeModal(id, e) {
+  if (!e || e.target === document.getElementById(id))
+    document.getElementById(id).classList.remove('open');
+}
+
+// ─── Add ────────────────────────────────────────────────
+function onCodeInput(v) {
+  clearTimeout(lookupTmr);
+  document.getElementById('addAutoFill').style.display = 'none';
+  if (v.trim().length < 4) return;
+  lookupTmr = setTimeout(() => doLookup(v.trim()), 400);
+}
+
+async function doLookup(code) {
+  const sp = document.getElementById('addSpin');
+  sp.style.display = 'inline-block';
+  try {
+    const res  = await fetchWT(`/api/lookup/${code}`, 10000);
+    const data = await res.json();
+    if (!data.found) return;
+    document.getElementById('addName').value     = data.name     || '';
+    document.getElementById('addSector').value   = data.sector   || '';
+    document.getElementById('addDividend').value = data.dividend || '';
+    setSeg('add', data.type || 'unknown');
+    const tl = {defensive:'🛡️ ディフェンシブ',cyclical:'⚡ 景気敏感',unknown:'● 不明'}[data.type]||'● 不明';
+    document.getElementById('addAutoFillText').innerHTML =
+      `<b>${data.name}</b> ／ ${data.sector||'—'} ／ ${tl}<br>年間配当: <b>${data.dividend > 0 ? data.dividend + '円' : '不明'}</b>`;
+    document.getElementById('addAutoFill').style.display = 'block';
+  } catch(e) {}
+  finally { sp.style.display = 'none'; }
+}
+
+function openAddModal() {
+  ['addCode','addName','addSector','addDividend','addMemo'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('addAutoFill').style.display = 'none';
+  document.getElementById('addErr').classList.remove('on');
+  setSeg('add','unknown');
+  document.getElementById('addOverlay').classList.add('open');
+  setTimeout(() => document.getElementById('addCode').focus(), 350);
+}
+
+async function submitAdd() {
+  const code = document.getElementById('addCode').value.trim();
+  const errEl = document.getElementById('addErr');
+  const btn   = document.getElementById('addBtn');
+  errEl.classList.remove('on');
+  if (!code) { errEl.textContent = '証券コードを入力してください'; errEl.classList.add('on'); return; }
+  btn.textContent = '取得中...'; btn.disabled = true;
+  try {
+    const res  = await fetch('/api/stocks', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        code,
+        name:               document.getElementById('addName').value.trim(),
+        sector:             document.getElementById('addSector').value.trim(),
+        stock_type:         addType,
+        dividend_per_share: parseFloat(document.getElementById('addDividend').value || 0),
+        alert_threshold:    5.0,
+        memo:               document.getElementById('addMemo').value.trim(),
+      })
+    });
+    const data = await res.json();
+    if (!res.ok) { errEl.textContent = data.error || 'エラー'; errEl.classList.add('on'); return; }
+    closeModal('addOverlay');
+    loadAll();
+  } catch(e) { errEl.textContent = 'ネットワークエラー'; errEl.classList.add('on'); }
+  finally { btn.textContent = '追加する'; btn.disabled = false; }
+}
+
+// ─── Edit ───────────────────────────────────────────────
+function openEditModal(code) {
+  const s = stocks.find(x => x.code === code);
+  if (!s) return;
+  document.getElementById('editCode').value      = code;
+  document.getElementById('editTitle').textContent = s.name + '（' + code + '）';
+  document.getElementById('editName').value      = s.name;
+  document.getElementById('editSector').value    = s.sector || '';
+  document.getElementById('editDividend').value  = s.dividend_per_share || '';
+  document.getElementById('editMemo').value      = s.memo || '';
+  document.getElementById('editReset').checked   = false;
+  document.getElementById('editErr').classList.remove('on');
+  setSeg('edit', s.stock_type || 'unknown');
+  document.getElementById('editOverlay').classList.add('open');
+}
+
+async function submitEdit() {
+  const code  = document.getElementById('editCode').value;
+  const errEl = document.getElementById('editErr');
+  const btn   = document.getElementById('editBtn');
+  errEl.classList.remove('on');
+  btn.textContent = '保存中...'; btn.disabled = true;
+  try {
+    const res = await fetch(`/api/stocks/${code}`, {
+      method:'PUT', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        name:               document.getElementById('editName').value.trim(),
+        sector:             document.getElementById('editSector').value.trim(),
+        stock_type:         editType,
+        dividend_per_share: parseFloat(document.getElementById('editDividend').value || 0),
+        memo:               document.getElementById('editMemo').value.trim(),
+        reset_base:         document.getElementById('editReset').checked,
+      })
+    });
+    if (!res.ok) { errEl.textContent = 'エラーが発生しました'; errEl.classList.add('on'); return; }
+    closeModal('editOverlay');
+    loadAll();
+  } catch(e) { errEl.textContent = 'ネットワークエラー'; errEl.classList.add('on'); }
+  finally { btn.textContent = '保存する'; btn.disabled = false; }
+}
+
+// ─── Delete ─────────────────────────────────────────────
+async function deleteStock(code) {
+  const s = stocks.find(x => x.code === code);
+  if (!confirm(`「${s ? s.name : code}」を削除しますか？`)) return;
+  await fetch(`/api/stocks/${code}`, {method:'DELETE'});
+  loadAll();
+}
+
+// ─── Init ───────────────────────────────────────────────
+function openInitModal() {
+  document.getElementById('initProgress').style.display = 'none';
+  document.getElementById('initProgress').innerHTML = '';
+  document.getElementById('initBtn').disabled = false;
+  document.getElementById('initBtn').textContent = '一括登録する';
+  document.getElementById('initOverlay').classList.add('open');
+}
+
+async function submitInit() {
+  const btn = document.getElementById('initBtn');
+  const prg = document.getElementById('initProgress');
+  btn.textContent = '登録中...'; btn.disabled = true;
+  prg.style.display = 'block';
+  prg.innerHTML = '<div class="spin" style="width:18px;height:18px;border-width:2px;margin:8px auto"></div>';
+  try {
+    const res  = await fetch('/api/init', {method:'POST'});
+    const data = await res.json();
+    prg.innerHTML = data.results.map(r =>
+      r.status==='ok'      ? `<div class="p-ok">✓ ${r.name}（${r.code}）</div>` :
+      r.status==='skipped' ? `<div class="p-sk">— ${r.code} 登録済みのためスキップ</div>` :
+                             `<div class="p-fail">✗ ${r.code} 取得失敗</div>`
+    ).join('') + `<div style="margin-top:8px;font-weight:700;color:var(--green)">登録: ${data.registered}件</div>`;
+    btn.textContent = '完了 ✓';
+    setTimeout(() => { closeModal('initOverlay'); loadAll(); }, 1500);
+  } catch(e) {
+    prg.innerHTML = '<div class="p-fail">エラーが発生しました</div>';
+    btn.disabled = false; btn.textContent = '一括登録する';
+  }
+}
+
+// ─── Boot ───────────────────────────────────────────────
+loadAll();
+startTimer();
+</script>
+</body>
+</html>
