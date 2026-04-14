@@ -138,37 +138,86 @@ def get_master(code: str) -> dict:
 
 # ── DB ──────────────────────────────────────────────────────────────
 
-def get_conn() -> sqlite3.Connection:
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
+DATABASE_URL = os.environ.get("DATABASE_URL", "")
 
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS watchlist (
-            id                 INTEGER PRIMARY KEY AUTOINCREMENT,
-            code               TEXT    NOT NULL UNIQUE,
-            name               TEXT    NOT NULL,
-            sector             TEXT    DEFAULT '',
-            stock_type         TEXT    DEFAULT 'unknown',
-            base_price         REAL    NOT NULL,
-            dividend_per_share REAL    DEFAULT 0,
-            alert_threshold    REAL    NOT NULL DEFAULT 5.0,
-            memo               TEXT    DEFAULT '',
-            created_at         TEXT    NOT NULL
-        )
-    """)
+if DATABASE_URL:
+    import psycopg2
+    import psycopg2.extras
+    PH = "%s"  # PostgreSQL プレースホルダー
 
-    # マイグレーション：既存DBに新カラムを追加
-    for col, definition in [
-        ("stock_type",         "TEXT DEFAULT 'unknown'"),
-        ("dividend_per_share", "REAL DEFAULT 0"),
-    ]:
-        try:
-            conn.execute(f"ALTER TABLE watchlist ADD COLUMN {col} {definition}")
-        except sqlite3.OperationalError:
-            pass  # すでに存在
+    def get_conn():
+        conn = psycopg2.connect(DATABASE_URL)
+        conn.autocommit = False
+        return conn
 
-    conn.commit()
-    return conn
+    def conn_rows(conn, sql, params=()):
+        sql = sql.replace("?", "%s")
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(sql, params)
+            return cur.fetchall()
+
+    def conn_execute(conn, sql, params=()):
+        sql = sql.replace("?", "%s")
+        with conn.cursor() as cur:
+            cur.execute(sql, params)
+
+    def init_db(conn):
+        with conn.cursor() as cur:
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS watchlist (
+                    id                 SERIAL PRIMARY KEY,
+                    code               TEXT   NOT NULL UNIQUE,
+                    name               TEXT   NOT NULL,
+                    sector             TEXT   DEFAULT '',
+                    stock_type         TEXT   DEFAULT 'unknown',
+                    base_price         REAL   NOT NULL,
+                    dividend_per_share REAL   DEFAULT 0,
+                    alert_threshold    REAL   NOT NULL DEFAULT 5.0,
+                    memo               TEXT   DEFAULT '',
+                    created_at         TEXT   NOT NULL
+                )
+            """)
+        conn.commit()
+
+else:
+    PH = "?"
+
+    def get_conn():
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS watchlist (
+                id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+                code               TEXT    NOT NULL UNIQUE,
+                name               TEXT    NOT NULL,
+                sector             TEXT    DEFAULT '',
+                stock_type         TEXT    DEFAULT 'unknown',
+                base_price         REAL    NOT NULL,
+                dividend_per_share REAL    DEFAULT 0,
+                alert_threshold    REAL    NOT NULL DEFAULT 5.0,
+                memo               TEXT    DEFAULT '',
+                created_at         TEXT    NOT NULL
+            )
+        """)
+        for col, definition in [
+            ("stock_type",         "TEXT DEFAULT 'unknown'"),
+            ("dividend_per_share", "REAL DEFAULT 0"),
+        ]:
+            try:
+                conn.execute(f"ALTER TABLE watchlist ADD COLUMN {col} {definition}")
+            except sqlite3.OperationalError:
+                pass
+        conn.commit()
+        return conn
+
+    def conn_rows(conn, sql, params=()):
+        return conn.execute(sql, params).fetchall()
+
+    def conn_execute(conn, sql, params=()):
+        conn.execute(sql, params)
+
+    def init_db(conn):
+        pass  # SQLiteはget_conn内で処理済み
 
 
 # ── 株価取得 ─────────────────────────────────────────────────────────
@@ -334,13 +383,13 @@ def api_lookup(code):
 @app.route("/api/stocks")
 def api_stocks():
     conn = get_conn()
-    rows = conn.execute("SELECT * FROM watchlist ORDER BY created_at").fetchall()
+    init_db(conn)
+    rows = conn_rows(conn, "SELECT * FROM watchlist ORDER BY created_at")
     conn.close()
 
     if not rows:
         return jsonify([])
 
-    # 全銘柄を一括バッチ取得（高速）
     codes  = [r["code"] for r in rows]
     prices = fetch_prices_batch(codes)
 
@@ -355,13 +404,13 @@ def api_stocks():
 @app.route("/api/stocks/<code>")
 def api_stock_single(code):
     conn = get_conn()
-    row  = conn.execute("SELECT * FROM watchlist WHERE code = ?", (code.upper(),)).fetchone()
+    rows = conn_rows(conn, "SELECT * FROM watchlist WHERE code = ?", (code.upper(),))
     conn.close()
-    if not row:
+    if not rows:
         return jsonify({"error": "Not found"}), 404
     prices = fetch_prices_batch([code.upper()])
     price  = prices.get(code.upper())
-    return jsonify(build_stock_dict(row, price))
+    return jsonify(build_stock_dict(rows[0], price))
 
 
 @app.route("/api/stocks", methods=["POST"])
@@ -374,7 +423,7 @@ def api_add():
         return jsonify({"error": "証券コードを入力してください"}), 400
 
     conn = get_conn()
-    if conn.execute("SELECT id FROM watchlist WHERE code = ?", (code,)).fetchone():
+    if conn_rows(conn, "SELECT id FROM watchlist WHERE code = ?", (code,)):
         conn.close()
         return jsonify({"error": f"{code} はすでに登録されています"}), 400
 
@@ -387,13 +436,12 @@ def api_add():
     jp_name = fetch_jp_name(code) if not master else ""
     display_name = (data.get("name") or "").strip() or master.get("name") or jp_name or en_name or code
 
-    conn.execute(
+    conn_execute(conn,
         """INSERT INTO watchlist
            (code, name, sector, stock_type, base_price, dividend_per_share, alert_threshold, memo, created_at)
            VALUES (?,?,?,?,?,?,?,?,?)""",
         (
-            code,
-            display_name,
+            code, display_name,
             data.get("sector", "").strip(),
             data.get("stock_type", "unknown"),
             price,
@@ -412,8 +460,8 @@ def api_add():
 def api_update(code):
     data = request.json or {}
     conn = get_conn()
-    row  = conn.execute("SELECT * FROM watchlist WHERE code = ?", (code.upper(),)).fetchone()
-    if not row:
+    rows = conn_rows(conn, "SELECT * FROM watchlist WHERE code = ?", (code.upper(),))
+    if not rows:
         conn.close()
         return jsonify({"error": "Not found"}), 404
 
@@ -436,7 +484,7 @@ def api_update(code):
 
     if updates:
         params.append(code.upper())
-        conn.execute(f"UPDATE watchlist SET {', '.join(updates)} WHERE code = ?", params)
+        conn_execute(conn, f"UPDATE watchlist SET {', '.join(updates)} WHERE code = ?", params)
         conn.commit()
     conn.close()
     return jsonify({"ok": True})
@@ -445,7 +493,7 @@ def api_update(code):
 @app.route("/api/stocks/<code>", methods=["DELETE"])
 def api_delete(code):
     conn = get_conn()
-    conn.execute("DELETE FROM watchlist WHERE code = ?", (code.upper(),))
+    conn_execute(conn, "DELETE FROM watchlist WHERE code = ?", (code.upper(),))
     conn.commit()
     conn.close()
     return jsonify({"ok": True})
@@ -486,7 +534,7 @@ def api_init():
     results = []
 
     for code, name, sector, stype, div, threshold in INITIAL_STOCKS:
-        if conn.execute("SELECT id FROM watchlist WHERE code = ?", (code,)).fetchone():
+        if conn_rows(conn, "SELECT id FROM watchlist WHERE code = ?", (code,)):
             skipped += 1
             results.append({"code": code, "status": "skipped"})
             continue
@@ -496,7 +544,7 @@ def api_init():
             results.append({"code": code, "status": "failed"})
             continue
 
-        conn.execute(
+        conn_execute(conn,
             """INSERT INTO watchlist
                (code,name,sector,stock_type,base_price,dividend_per_share,alert_threshold,memo,created_at)
                VALUES (?,?,?,?,?,?,?,?,?)""",
@@ -513,27 +561,30 @@ def api_init():
 
 def migrate_names():
     """起動時にDBの銘柄名を日本語に更新（STOCK_MASTER優先、なければYahoo Finance Japan）"""
-    conn = get_conn()
-    rows = conn.execute("SELECT code, name FROM watchlist").fetchall()
-    updated = 0
-    for row in rows:
-        master = get_master(row["code"])
-        if master:
-            conn.execute(
-                "UPDATE watchlist SET name=?, sector=?, stock_type=?, dividend_per_share=? WHERE code=?",
-                (master["name"], master["sector"], master["type"], master["dividend"], row["code"])
-            )
-            updated += 1
-        else:
-            # マスターにない銘柄は Yahoo Finance Japan から日本語名を取得
-            jp = fetch_jp_name(row["code"])
-            if jp and jp != row["name"]:
-                conn.execute("UPDATE watchlist SET name=? WHERE code=?", (jp, row["code"]))
+    try:
+        conn = get_conn()
+        init_db(conn)
+        rows = conn_rows(conn, "SELECT code, name FROM watchlist")
+        updated = 0
+        for row in rows:
+            master = get_master(row["code"])
+            if master:
+                conn_execute(conn,
+                    "UPDATE watchlist SET name=?, sector=?, stock_type=?, dividend_per_share=? WHERE code=?",
+                    (master["name"], master["sector"], master["type"], master["dividend"], row["code"])
+                )
                 updated += 1
-    if updated:
-        conn.commit()
-        print(f"  銘柄名を日本語に更新: {updated}件")
-    conn.close()
+            else:
+                jp = fetch_jp_name(row["code"])
+                if jp and jp != row["name"]:
+                    conn_execute(conn, "UPDATE watchlist SET name=? WHERE code=?", (jp, row["code"]))
+                    updated += 1
+        if updated:
+            conn.commit()
+            print(f"  銘柄名を日本語に更新: {updated}件")
+        conn.close()
+    except Exception as e:
+        print(f"  migrate_names エラー: {e}")
 
 
 migrate_names()
