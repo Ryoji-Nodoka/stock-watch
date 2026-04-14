@@ -316,7 +316,7 @@ body{color:var(--text);font-family:-apple-system,'Hiragino Sans','Helvetica Neue
         <div class="af-body" id="addAutoFillText"></div>
       </div>
       <div><label class="fl">銘柄名</label><input class="fi" id="addName" type="text" placeholder="コード入力で自動補完"></div>
-      <div><label class="fl">業種</label><input class="fi" id="addSector" type="text" placeholder="コード入力で自動補完"></div>
+      <div><label class="fl">業種</label><select class="fi" id="addSector"><option value="">コード入力で自動補完</option></select></div>
       <div>
         <label class="fl">銘柄タイプ</label>
         <div class="seg">
@@ -349,7 +349,7 @@ body{color:var(--text);font-family:-apple-system,'Hiragino Sans','Helvetica Neue
     <div class="mb">
       <input type="hidden" id="editCode">
       <div><label class="fl">銘柄名</label><input class="fi" id="editName" type="text"></div>
-      <div><label class="fl">業種</label><input class="fi" id="editSector" type="text"></div>
+      <div><label class="fl">業種</label><select class="fi" id="editSector"><option value=""></option></select></div>
       <div>
         <label class="fl">銘柄タイプ</label>
         <div class="seg">
@@ -397,6 +397,22 @@ body{color:var(--text);font-family:-apple-system,'Hiragino Sans','Helvetica Neue
 
 <script>
 // ─── State ─────────────────────────────────────────────
+const SECTORS = [
+  "水産・農林業","建設業","不動産業","非鉄金属","工業","サービス業",
+  "機械","金属部品","情報・通信業","食料品","医薬品","陸運業",
+  "その他金融業","小売業","卸売業","化学","繊維製品","電気機器",
+  "ガラス・土石製品","証券、商品先物取引業","輸送用機器","石油・石炭製品",
+  "パルプ・紙","精密機器","ゴム製品","鉄鋼","銀行業","保険業",
+  "その他製品","倉庫・運輸関連業","海運業","空運業","電気・ガス業"
+];
+
+// 業種セレクトボックスを初期化
+function initSectorSelects() {
+  const opts = SECTORS.map(s => `<option value="${s}">${s}</option>`).join('');
+  document.getElementById('addSector').innerHTML  = `<option value="">選択してください</option>${opts}`;
+  document.getElementById('editSector').innerHTML = `<option value="">選択してください</option>${opts}`;
+}
+
 let stocks   = [];
 let addType  = 'unknown';
 let editType = 'unknown';
@@ -815,6 +831,7 @@ async function submitInit() {
 }
 
 // ─── Boot ───────────────────────────────────────────────
+initSectorSelects();
 loadAll();
 startTimer();
 </script>
