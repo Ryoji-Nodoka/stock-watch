@@ -3,13 +3,14 @@
 起動: python3 app.py
 """
 
+import os
 import sqlite3
 import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
 
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, jsonify, render_template, request, session, redirect, url_for
 
 try:
     import yfinance as yf
@@ -18,48 +19,102 @@ except ImportError:
     sys.exit(1)
 
 app = Flask(__name__)
+app.secret_key = os.environ.get("SECRET_KEY", "stock-watch-secret-2024")
+APP_PASSWORD = os.environ.get("APP_PASSWORD", "stock1234")
 DB_PATH = Path(__file__).parent / "watchlist.db"
+
+
+@app.before_request
+def require_login():
+    if request.endpoint in ("login", "static"):
+        return
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
+
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    error = ""
+    if request.method == "POST":
+        if request.form.get("password") == APP_PASSWORD:
+            session["logged_in"] = True
+            return redirect(url_for("index"))
+        error = "パスワードが違います"
+    return f"""<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>ログイン</title>
+<style>
+*{{box-sizing:border-box;margin:0;padding:0}}
+body{{background:#0c0e18;color:#e8eaf5;font-family:-apple-system,'Hiragino Sans',sans-serif;
+     display:flex;align-items:center;justify-content:center;min-height:100vh}}
+.card{{background:#141720;border:1px solid #252a3d;border-radius:16px;padding:40px 32px;width:90%;max-width:360px;text-align:center}}
+h1{{font-size:1.2rem;margin-bottom:8px;color:#818cf8}}
+p{{color:#8890b0;font-size:.85rem;margin-bottom:28px}}
+input{{width:100%;background:#0c0e18;border:1px solid #252a3d;border-radius:10px;
+       color:#e8eaf5;font-size:1rem;padding:14px 16px;margin-bottom:16px;outline:none}}
+input:focus{{border-color:#818cf8}}
+button{{width:100%;background:#818cf8;border:none;border-radius:10px;color:#fff;
+        font-size:1rem;font-weight:700;padding:14px;cursor:pointer}}
+.err{{color:#ef4444;font-size:.85rem;margin-top:12px}}
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>高配当株ウォッチ</h1>
+  <p>パスワードを入力してください</p>
+  <form method="post">
+    <input type="password" name="password" placeholder="パスワード" autofocus>
+    <button type="submit">ログイン</button>
+  </form>
+  {"<p class='err'>" + error + "</p>" if error else ""}
+</div>
+</body>
+</html>"""
 
 # ── 銘柄マスター（名前・業種・タイプ・年間配当） ─────────────────────
 STOCK_MASTER = {
-    "1605": {"name": "INPEX",                          "sector": "エネルギー",   "type": "cyclical",  "dividend": 56.0},
-    "1925": {"name": "大和ハウス工業",                  "sector": "建設",         "type": "cyclical",  "dividend": 130.0},
-    "2502": {"name": "アサヒグループホールディングス",   "sector": "食品・飲料",   "type": "defensive", "dividend": 60.0},
-    "2503": {"name": "キリンホールディングス",           "sector": "食品・飲料",   "type": "defensive", "dividend": 67.0},
-    "2914": {"name": "日本たばこ産業（JT）",             "sector": "食品・たばこ", "type": "defensive", "dividend": 188.0},
-    "4063": {"name": "信越化学工業",                    "sector": "化学",         "type": "cyclical",  "dividend": 50.0},
-    "4452": {"name": "花王",                            "sector": "生活用品",     "type": "defensive", "dividend": 150.0},
-    "4502": {"name": "武田薬品工業",                    "sector": "医薬品",       "type": "defensive", "dividend": 188.0},
-    "4503": {"name": "アステラス製薬",                  "sector": "医薬品",       "type": "defensive", "dividend": 60.0},
-    "5019": {"name": "出光興産",                        "sector": "エネルギー",   "type": "cyclical",  "dividend": 120.0},
-    "5020": {"name": "ENEOSホールディングス",            "sector": "エネルギー",   "type": "cyclical",  "dividend": 22.0},
-    "5108": {"name": "ブリヂストン",                    "sector": "自動車部品",   "type": "cyclical",  "dividend": 220.0},
-    "6301": {"name": "小松製作所（コマツ）",             "sector": "機械",         "type": "cyclical",  "dividend": 80.0},
-    "6501": {"name": "日立製作所",                      "sector": "電気機器",     "type": "cyclical",  "dividend": 60.0},
-    "6503": {"name": "三菱電機",                        "sector": "電気機器",     "type": "cyclical",  "dividend": 40.0},
-    "6758": {"name": "ソニーグループ",                  "sector": "電気機器",     "type": "cyclical",  "dividend": 85.0},
-    "6902": {"name": "デンソー",                        "sector": "自動車部品",   "type": "cyclical",  "dividend": 60.0},
-    "7203": {"name": "トヨタ自動車",                    "sector": "自動車",       "type": "cyclical",  "dividend": 60.0},
-    "7267": {"name": "本田技研工業（ホンダ）",           "sector": "自動車",       "type": "cyclical",  "dividend": 68.0},
-    "7751": {"name": "キヤノン",                        "sector": "精密機器",     "type": "cyclical",  "dividend": 100.0},
-    "8001": {"name": "伊藤忠商事",                      "sector": "商社",         "type": "cyclical",  "dividend": 110.0},
-    "8002": {"name": "丸紅",                            "sector": "商社",         "type": "cyclical",  "dividend": 78.0},
-    "8015": {"name": "豊田通商",                        "sector": "商社",         "type": "cyclical",  "dividend": 110.0},
-    "8031": {"name": "三井物産",                        "sector": "商社",         "type": "cyclical",  "dividend": 115.0},
-    "8053": {"name": "住友商事",                        "sector": "商社",         "type": "cyclical",  "dividend": 105.0},
-    "8058": {"name": "三菱商事",                        "sector": "商社",         "type": "cyclical",  "dividend": 100.0},
-    "8306": {"name": "三菱UFJフィナンシャルグループ",    "sector": "金融",         "type": "cyclical",  "dividend": 41.0},
-    "8316": {"name": "三井住友フィナンシャルグループ",   "sector": "金融",         "type": "cyclical",  "dividend": 330.0},
-    "8411": {"name": "みずほフィナンシャルグループ",     "sector": "金融",         "type": "cyclical",  "dividend": 115.0},
-    "8591": {"name": "オリックス",                      "sector": "金融",         "type": "cyclical",  "dividend": 94.0},
-    "8802": {"name": "三菱地所",                        "sector": "不動産",       "type": "cyclical",  "dividend": 34.0},
-    "9020": {"name": "東日本旅客鉄道（JR東日本）",       "sector": "運輸",         "type": "defensive", "dividend": 40.0},
-    "9432": {"name": "NTT（日本電信電話）",              "sector": "通信",         "type": "defensive", "dividend": 5.1},
-    "9433": {"name": "KDDI",                            "sector": "通信",         "type": "defensive", "dividend": 145.0},
-    "9501": {"name": "東京電力ホールディングス",          "sector": "電力",         "type": "defensive", "dividend": 0.0},
-    "9503": {"name": "関西電力",                        "sector": "電力",         "type": "defensive", "dividend": 60.0},
-    "9531": {"name": "東京ガス",                        "sector": "ガス",         "type": "defensive", "dividend": 70.0},
-    "9984": {"name": "ソフトバンクグループ",             "sector": "通信",         "type": "cyclical",  "dividend": 88.0},
+    "1605": {"name": "INPEX",                          "sector": "石油・石炭製品", "type": "cyclical",  "dividend": 76.0},
+    "1925": {"name": "大和ハウス工業",                  "sector": "建設業",         "type": "cyclical",  "dividend": 145.0},
+    "2502": {"name": "アサヒグループホールディングス",   "sector": "食料品",         "type": "defensive", "dividend": 119.0},
+    "2503": {"name": "キリンホールディングス",           "sector": "食料品",         "type": "defensive", "dividend": 71.0},
+    "2914": {"name": "日本たばこ産業（JT）",             "sector": "食料品",         "type": "defensive", "dividend": 194.0},
+    "4063": {"name": "信越化学工業",                    "sector": "化学",           "type": "cyclical",  "dividend": 100.0},
+    "4452": {"name": "花王",                            "sector": "化学",           "type": "defensive", "dividend": 148.0},
+    "4502": {"name": "武田薬品工業",                    "sector": "医薬品",         "type": "defensive", "dividend": 188.0},
+    "4503": {"name": "アステラス製薬",                  "sector": "医薬品",         "type": "defensive", "dividend": 70.0},
+    "5019": {"name": "出光興産",                        "sector": "石油・石炭製品", "type": "cyclical",  "dividend": 120.0},
+    "5020": {"name": "ENEOSホールディングス",            "sector": "石油・石炭製品", "type": "cyclical",  "dividend": 23.0},
+    "5108": {"name": "ブリヂストン",                    "sector": "ゴム製品",       "type": "cyclical",  "dividend": 240.0},
+    "6301": {"name": "小松製作所（コマツ）",             "sector": "機械",           "type": "cyclical",  "dividend": 136.0},
+    "6501": {"name": "日立製作所",                      "sector": "電気機器",       "type": "cyclical",  "dividend": 80.0},
+    "6503": {"name": "三菱電機",                        "sector": "電気機器",       "type": "cyclical",  "dividend": 60.0},
+    "6758": {"name": "ソニーグループ",                  "sector": "電気機器",       "type": "cyclical",  "dividend": 95.0},
+    "6902": {"name": "デンソー",                        "sector": "輸送用機器",     "type": "cyclical",  "dividend": 75.0},
+    "7203": {"name": "トヨタ自動車",                    "sector": "輸送用機器",     "type": "cyclical",  "dividend": 90.0},
+    "7267": {"name": "本田技研工業（ホンダ）",           "sector": "輸送用機器",     "type": "cyclical",  "dividend": 68.0},
+    "7751": {"name": "キヤノン",                        "sector": "精密機器",       "type": "cyclical",  "dividend": 100.0},
+    "8001": {"name": "伊藤忠商事",                      "sector": "卸売業",         "type": "cyclical",  "dividend": 160.0},
+    "8002": {"name": "丸紅",                            "sector": "卸売業",         "type": "cyclical",  "dividend": 91.0},
+    "8015": {"name": "豊田通商",                        "sector": "卸売業",         "type": "cyclical",  "dividend": 150.0},
+    "8031": {"name": "三井物産",                        "sector": "卸売業",         "type": "cyclical",  "dividend": 130.0},
+    "8053": {"name": "住友商事",                        "sector": "卸売業",         "type": "cyclical",  "dividend": 120.0},
+    "8058": {"name": "三菱商事",                        "sector": "卸売業",         "type": "cyclical",  "dividend": 150.0},
+    "8306": {"name": "三菱UFJフィナンシャルグループ",    "sector": "銀行業",         "type": "cyclical",  "dividend": 50.0},
+    "8316": {"name": "三井住友フィナンシャルグループ",   "sector": "銀行業",         "type": "cyclical",  "dividend": 330.0},
+    "8411": {"name": "みずほフィナンシャルグループ",     "sector": "銀行業",         "type": "cyclical",  "dividend": 130.0},
+    "8591": {"name": "オリックス",                      "sector": "その他金融業",   "type": "cyclical",  "dividend": 94.0},
+    "8802": {"name": "三菱地所",                        "sector": "不動産業",       "type": "cyclical",  "dividend": 34.0},
+    "9020": {"name": "東日本旅客鉄道（JR東日本）",       "sector": "陸運業",         "type": "defensive", "dividend": 100.0},
+    "9432": {"name": "NTT（日本電信電話）",              "sector": "情報・通信業",   "type": "defensive", "dividend": 5.1},
+    "9433": {"name": "KDDI",                            "sector": "情報・通信業",   "type": "defensive", "dividend": 145.0},
+    "9501": {"name": "東京電力ホールディングス",          "sector": "電気・ガス業",   "type": "defensive", "dividend": 0.0},
+    "9503": {"name": "関西電力",                        "sector": "電気・ガス業",   "type": "defensive", "dividend": 65.0},
+    "9531": {"name": "東京ガス",                        "sector": "電気・ガス業",   "type": "defensive", "dividend": 75.0},
+    "9984": {"name": "ソフトバンクグループ",             "sector": "情報・通信業",   "type": "cyclical",  "dividend": 88.0},
 }
 
 SECTOR_JP = {
@@ -413,14 +468,14 @@ def api_notify():
 
 INITIAL_STOCKS = [
     # (code, name, sector, stock_type, dividend_per_share, threshold)
-    ("8058", "三菱商事",                     "商社",         "cyclical",  100.0, 5.0),
-    ("8031", "三井物産",                     "商社",         "cyclical",  115.0, 5.0),
-    ("9432", "NTT（日本電信電話）",           "通信",         "defensive",   5.1, 5.0),
-    ("8316", "三井住友フィナンシャルグループ", "金融",         "cyclical",  330.0, 5.0),
-    ("5020", "ENEOSホールディングス",         "エネルギー",   "cyclical",   22.0, 5.0),
-    ("8053", "住友商事",                     "商社",         "cyclical",  105.0, 5.0),
-    ("2914", "日本たばこ産業（JT）",          "食品・たばこ", "defensive", 188.0, 5.0),
-    ("4502", "武田薬品工業",                 "医薬品",       "defensive", 188.0, 5.0),
+    ("8058", "三菱商事",                     "卸売業",         "cyclical",  150.0, 5.0),
+    ("8031", "三井物産",                     "卸売業",         "cyclical",  130.0, 5.0),
+    ("9432", "NTT（日本電信電話）",           "情報・通信業",   "defensive",   5.1, 5.0),
+    ("8316", "三井住友フィナンシャルグループ", "銀行業",         "cyclical",  330.0, 5.0),
+    ("5020", "ENEOSホールディングス",         "石油・石炭製品", "cyclical",   23.0, 5.0),
+    ("8053", "住友商事",                     "卸売業",         "cyclical",  120.0, 5.0),
+    ("2914", "日本たばこ産業（JT）",          "食料品",         "defensive", 194.0, 5.0),
+    ("4502", "武田薬品工業",                 "医薬品",         "defensive", 188.0, 5.0),
 ]
 
 
@@ -464,11 +519,11 @@ def migrate_names():
     for row in rows:
         master = get_master(row["code"])
         if master:
-            new_name = master["name"]
-            if new_name and new_name != row["name"]:
-                conn.execute("UPDATE watchlist SET name=?, sector=?, stock_type=? WHERE code=?",
-                             (master["name"], master["sector"], master["type"], row["code"]))
-                updated += 1
+            conn.execute(
+                "UPDATE watchlist SET name=?, sector=?, stock_type=?, dividend_per_share=? WHERE code=?",
+                (master["name"], master["sector"], master["type"], master["dividend"], row["code"])
+            )
+            updated += 1
         else:
             # マスターにない銘柄は Yahoo Finance Japan から日本語名を取得
             jp = fetch_jp_name(row["code"])
@@ -480,8 +535,6 @@ def migrate_names():
         print(f"  銘柄名を日本語に更新: {updated}件")
     conn.close()
 
-
-import os
 
 migrate_names()
 
