@@ -23,7 +23,7 @@ DB_PATH = Path(__file__).parent / "watchlist.db"
 
 # ── 銘柄マスター（名前・業種・タイプ・年間配当） ─────────────────────
 STOCK_MASTER = {
-    "6454": {"name": "マックス",                          "sector": "機械",           "type": "cyclical",  "dividend": 36.0},
+    "6454": {"name": "マックス",                          "sector": "機械",           "type": "cyclical",  "dividend": 28.5},
     "1605": {"name": "INPEX",                          "sector": "石油・石炭製品", "type": "cyclical",  "dividend": 76.0},
     "1925": {"name": "大和ハウス工業",                  "sector": "建設業",         "type": "cyclical",  "dividend": 145.0},
     "2502": {"name": "アサヒグループホールディングス",   "sector": "食料品",         "type": "defensive", "dividend": 119.0},
@@ -309,7 +309,8 @@ def api_lookup(code):
             return jsonify({"found": False, "error": "銘柄が見つかりませんでした"})
 
         en_sector = info.get("sector", "")
-        dividend  = float(info.get("dividendRate") or info.get("trailingAnnualDividendRate") or 0)
+        # trailingAnnualDividendRate（実績値）を優先。dividendRateは予測値で誤りが多い
+        dividend  = float(info.get("trailingAnnualDividendRate") or info.get("dividendRate") or 0)
 
         # 日本語名を取得（Yahoo Finance Japan API 優先）
         jp_name = fetch_jp_name(code)
