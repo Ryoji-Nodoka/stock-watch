@@ -65,11 +65,17 @@ STOCK_MASTER = {
 }
 
 SECTOR_JP = {
-    "Basic Materials": "素材", "Communication Services": "通信",
-    "Consumer Cyclical": "一般消費財", "Consumer Defensive": "生活必需品",
-    "Energy": "エネルギー", "Financial Services": "金融",
-    "Healthcare": "ヘルスケア", "Industrials": "産業・機械",
-    "Real Estate": "不動産", "Technology": "テクノロジー", "Utilities": "公益事業",
+    "Basic Materials":        "化学",
+    "Communication Services": "情報・通信業",
+    "Consumer Cyclical":      "サービス業",
+    "Consumer Defensive":     "食料品",
+    "Energy":                 "石油・石炭製品",
+    "Financial Services":     "その他金融業",
+    "Healthcare":             "医薬品",
+    "Industrials":            "機械",
+    "Real Estate":            "不動産業",
+    "Technology":             "電気機器",
+    "Utilities":              "電気・ガス業",
 }
 SECTOR_TYPE = {
     "Communication Services": "defensive", "Consumer Defensive": "defensive",
