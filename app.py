@@ -10,7 +10,7 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-from flask import Flask, jsonify, render_template, request, session, redirect, url_for
+from flask import Flask, jsonify, render_template, request
 
 try:
     import yfinance as yf
@@ -19,64 +19,11 @@ except ImportError:
     sys.exit(1)
 
 app = Flask(__name__)
-app.secret_key = os.environ.get("SECRET_KEY", "stock-watch-secret-2024")
-APP_PASSWORD = os.environ.get("APP_PASSWORD", "stock1234")
 DB_PATH = Path(__file__).parent / "watchlist.db"
-
-
-@app.before_request
-def require_login():
-    if request.endpoint in ("login", "static"):
-        return
-    if not session.get("logged_in"):
-        return redirect(url_for("login"))
-
-
-@app.route("/login", methods=["GET", "POST"])
-def login():
-    error = ""
-    if request.method == "POST":
-        if request.form.get("password") == APP_PASSWORD:
-            session["logged_in"] = True
-            return redirect(url_for("index"))
-        error = "パスワードが違います"
-    return f"""<!DOCTYPE html>
-<html lang="ja">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<title>ログイン</title>
-<style>
-*{{box-sizing:border-box;margin:0;padding:0}}
-body{{background:#0c0e18;color:#e8eaf5;font-family:-apple-system,'Hiragino Sans',sans-serif;
-     display:flex;align-items:center;justify-content:center;min-height:100vh}}
-.card{{background:#141720;border:1px solid #252a3d;border-radius:16px;padding:40px 32px;width:90%;max-width:360px;text-align:center}}
-h1{{font-size:1.2rem;margin-bottom:8px;color:#818cf8}}
-p{{color:#8890b0;font-size:.85rem;margin-bottom:28px}}
-input{{width:100%;background:#0c0e18;border:1px solid #252a3d;border-radius:10px;
-       color:#e8eaf5;font-size:1rem;padding:14px 16px;margin-bottom:16px;outline:none}}
-input:focus{{border-color:#818cf8}}
-button{{width:100%;background:#818cf8;border:none;border-radius:10px;color:#fff;
-        font-size:1rem;font-weight:700;padding:14px;cursor:pointer}}
-.err{{color:#ef4444;font-size:.85rem;margin-top:12px}}
-</style>
-</head>
-<body>
-<div class="card">
-  <h1>高配当株ウォッチ</h1>
-  <p>パスワードを入力してください</p>
-  <form method="post">
-    <input type="password" name="password" placeholder="パスワード" autofocus>
-    <button type="submit">ログイン</button>
-  </form>
-  {"<p class='err'>" + error + "</p>" if error else ""}
-</div>
-</body>
-</html>"""
 
 # ── 銘柄マスター（名前・業種・タイプ・年間配当） ─────────────────────
 STOCK_MASTER = {
+    "6454": {"name": "マックス",                          "sector": "機械",           "type": "cyclical",  "dividend": 36.0},
     "1605": {"name": "INPEX",                          "sector": "石油・石炭製品", "type": "cyclical",  "dividend": 76.0},
     "1925": {"name": "大和ハウス工業",                  "sector": "建設業",         "type": "cyclical",  "dividend": 145.0},
     "2502": {"name": "アサヒグループホールディングス",   "sector": "食料品",         "type": "defensive", "dividend": 119.0},
